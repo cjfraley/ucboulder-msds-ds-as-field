@@ -1,0 +1,155 @@
+---
+title: "Data Science as a Field NYPD Exercise"
+author: "Charles Fraley"
+date: "2022-07-22"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(forecast)
+library(lubridate)
+library(mgcv)
+library(reshape)
+library(stringi)
+library(stringr)
+```
+
+# Basic Prep
+## Load Data and Initial Summary
+
+```{r echo = FALSE}
+raw_data <- read.csv(url("https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"))
+summary(raw_data)
+```
+
+# Data Cleaning
+I only need one coordinate source, so I'm going to keep the Latitude and Longitude and get rid of unnecessary items.
+```{r echo = FALSE}
+clean <- raw_data %>% select(-one_of("Latitude/Longitude","INCIDENT_KEY","X_COORD_CD","Y_COORD_CD"))
+```
+
+Convert dates and times corresponding objects.
+```{r echo = FALSE}
+clean <- mutate(clean,OCCUR_TIME = as.POSIXct(paste(OCCUR_DATE,OCCUR_TIME),format="%m/%d/%Y %H:%M:%S",tz="EST", origin = "1970-01-01"))
+clean <- transform(clean, OCCUR_DATE = mdy(OCCUR_DATE))
+```
+
+Statistical murder flag should be binary not a string
+```{r echo = FALSE}
+clean <- transform(clean,STATISTICAL_MURDER_FLAG = (STATISTICAL_MURDER_FLAG=="true"))
+```
+
+Summary to confirm no missing data
+```{r echo= FALSE}
+summary(clean)
+```
+
+# Initial transformation
+I would like to break down the data into 
+
+\newpage
+
+# Appendix: Discarded Initial Exploration
+## Basic Transformations
+Creating 2 column table of dates vs num of shootings. Displaying with basic linear model.
+
+```{r echo = FALSE}
+by_day <- table(clean$OCCUR_DATE)
+by_day_df <- data.frame(by_day)
+colnames(by_day_df) <- c("date","shootings")
+
+by_day_df <- transform(by_day_df,date=as.POSIXct(date, origin = "1970-01-01"))
+lmod <- lm(date ~ shootings, data = by_day_df)
+lmod
+shotplot <- ggplot(by_day_df)+geom_point(
+  data=by_day_df,
+  aes(x=date, y=shootings))+
+  geom_smooth(data=by_day_df, method='lm', aes(x=date, y=shootings))
+shotplot
+```
+
+
+## Analysis
+
+### Modelling
+Linear model is not really useful, trying an alternative fit based on a custom periodic model:
+
+$a*sin(\frac{date}{b}+c)+d*sin(\frac{date}{e}+f)+g*date+h$
+
+```{r echo=F}
+date_to_int <- function(end_date) {
+  result<-as.numeric(difftime(end_date,ymd("2006-01-01"),units="days"))
+}
+```
+```{r echo=F}
+nlc <- nls.control(maxiter = 1000)
+custommod<-nls(
+  shootings ~ a*sin(date_to_int(date)/b+c)+d*sin(date_to_int(date)/e+f)+g*date_to_int(date)+h,
+  data=by_day_df,
+  control=nlc,
+  start=list(a=30,b=300,c=0,d=10,e=150,f=0,g=0,h=10)
+  )
+
+summary(custommod)
+```
+```{r echo=F, eval=T}
+prediction <- predict(custommod, by_day_df$date)
+prediction <- data.frame(by_day_df$date, prediction)
+colnames(prediction) <- c("date","shootings")
+head(prediction)
+```
+```{r echo=F, eval=T}
+shotplot <- shotplot + 
+  geom_line(data=prediction,aes(x=date, y=shootings), color="red")
+#  stat_function(
+#    fun=function(x) custommod["a"]*sin(date_to_int(x)/custommod["b"]+
+#                                         custommod["c"])) #+d*sin(date_to_int(x)/e+f)+g*date_to_int(x)+h)
+shotplot
+```
+### Periodic examination
+
+```{r echo=F, eval=T}
+class(by_day_df$date)
+```
+```{r echo=F, eval=F}
+# split <- separate(by_day_df$date, c('date1','date2'))
+by_month <-group_by(month=floor_date(by_day_df$date, 'month'))
+summary(by_month)
+```
+
+### Geographic Examination
+```{r echo=T, eval=F}
+lat_lon <- data.frame(stri_extract_all_regex(clean$Lon_Lat,'-?\\d+\\.\\d+'))
+melted_coord <-melt(lat_lon)
+```
+### Additional Questions Prompted
+
+A future angle for investigation may be to find locations where there has been an increase in shootings.
+Additionally, it would be useful to look specifically for periodic patterns especially those that can be localized. 
+Finally it would be good to correlate changes to various policy decisions and changes in the city. This does bring up a lot of complications. Correlation is not causation etc.
+
+## Conclusion
+
+There appears to be a general downward trend but the amount of noise and looseness of the fit does not suggest confidence.
+
+### Bias Sources
+
+#### Data Source
+Selection bias based on where shootings are reported to police.
+
+Information is not very generalizable as New York is a very unique location.
+
+#### Personal bias
+Lack of knowledge about New York. 
+The aimlessness and lack of preexisting knowledge about New York lead me to make rather general analysis rather than a more useful breakdown towards a defined goal.
+
+#### Bias mitigation
+
+My approach to this data has been largely exploratory. 
+I did not really draw much in the way of conclusions. 
+Going forward a way to mitigate bias may be to look to others for potential questions and hypotheses.
+This may prevent all my answers coming from my pre-existing beliefs determining the questions.
+My exploration was partially removed from my own feelings on the subject by my focus being by necessity technical.
+I am an R novice so my goals were largely around handling basic R tasks.
