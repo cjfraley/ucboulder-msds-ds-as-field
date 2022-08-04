@@ -60,8 +60,8 @@ summary(clean)
 # Initial transformation
 
 ## Civic Regions and Year
-Drop unneeded columns for this 
 I would like to break down the data into Burroughs and precincts as well as breaking it down by year for an initial view of the trends.
+
 ```{r echo= F, eval=T}
 clean <- mutate(clean, year=year(OCCUR_DATE))
 boros <- select(clean,
@@ -71,12 +71,12 @@ boros <- select(clean,
       "Longitude",
       "OCCUR_DATE"
   ))
+
 boro_y <- data.frame(t(table(group_by(boros,year))))
 boroplot <- ggplot(boro_y, aes(x=year,y=Freq,col=BORO,group=BORO))+geom_line()
-# row.names(table(group_by(boros,year)))
 boroplot
-# boros_y <- table(group_by(boros,year)) %>% melt( variable.name="Year")
 ```
+
 ```{r echo= F, eval=T}
 prec <- select(clean,
   -one_of(
@@ -87,20 +87,97 @@ prec <- select(clean,
   ))
 prec_y <- data.frame(t(table(group_by(prec,year))))
 precplot <- ggplot(prec_y, aes(x=year,y=Freq,col=PRECINCT,group=PRECINCT))+geom_line()
-# row.names(table(group_by(boros,year)))
 precplot
 ```
-## Latitude and Longitude focus
-Break up by year.
-Take only shooting locations.
-Use heat maps for exploration.
 
+However these results are more noisy than useful. Additionally this doesn't take into account the size of boros/precincts. As we're focused on change, we'll take another look at proportional change.
 
+$y_0=0$
 
+If $freq_{n-1}==0$, $y_n=\frac{freq_n-freq_{n-1}}{freq_{n-1}}$ 
+  else 
+    if $freq_n=0$
+      $y=0$
+    else
+      $y=NA$
 
+```{r echo= F, eval=T}
+boro_d=data.frame(year=unique(boro_y$year))
 
+for (boro_name in levels(boros$BORO)){
+  boro_d[boro_name] <- transmute(
+    filter(boro_y, BORO==boro_name),
+    boro_name=ifelse(
+      lag(Freq)==0,
+      ifelse(
+        Freq==0,
+        0,
+        NA
+      ),
+      (Freq-lag(Freq))/lag(Freq)
+  ))
+}
+p_boro_d <- pivot_longer(boro_d, cols=levels(boros$BORO),names_to = "BORO",values_to="change")
+boroplot <- ggplot(p_boro_d, aes(x=year,y=change,col=BORO,group=BORO))+geom_line()
+boroplot
+```
+```{r echo= F, eval=T}
+prec_d=data.frame(year=unique(prec_y$year))
 
+for (prec_num in levels(prec$PRECINCT)){
+  prec_d[prec_num] <- transmute(
+    filter(prec_y, PRECINCT==prec_num),
+    prec_num=ifelse(
+      lag(Freq)==0,
+      ifelse(
+        Freq==0,
+        0,
+        NA
+      ),
+      (Freq-lag(Freq))/lag(Freq)
+  ))
+}
+p_prec_d <- pivot_longer(prec_d, cols=levels(prec$PRECINCT),names_to = "PRECINCT",values_to="change")
+precplot <- ggplot(p_prec_d, aes(x=year,y=change,col=PRECINCT,group=PRECINCT))+geom_line()
+precplot
+```
 
+## Control for city wide changes
+
+For trying to isolate changes for further investigation it would probably be useful to account for the city wide changes.
+
+```{r echo= F, eval=T}
+all <- select(clean,"year")
+
+all_y <- data.frame(t(table(group_by(all,year)))) %>% select(-(Var1))
+
+all_d <- mutate(
+  all_y,
+  change=ifelse(
+    lag(Freq)==0,
+    ifelse(
+      Freq==0,
+      0,
+      NA
+    ),
+    (Freq-lag(Freq))/lag(Freq)
+  )
+)
+all_d
+allplot <- ggplot(all_d)+aes(x=year,y=change, group=1)+geom_line()
+allplot
+```
+
+So change at the boro and precinct level - the change at the city level:
+```{r echo= F, eval=F}
+prec_d_norm <- prec_d$year
+for (prec_num in levels(prec$PRECINCT)){
+  prec_d_norm[prec_num] <- transmute(
+    prec_d,
+    prec_num = 
+  ))
+}
+```
 \newpage
 
 # Appendix: Discarded Initial Exploration
