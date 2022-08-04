@@ -27,18 +27,29 @@ summary(raw_data)
 # Data Cleaning
 I only need one coordinate source, so I'm going to keep the Latitude and Longitude and get rid of unnecessary items.
 ```{r echo = FALSE}
-clean <- raw_data %>% select(-one_of("Latitude/Longitude","INCIDENT_KEY","X_COORD_CD","Y_COORD_CD"))
+clean <- raw_data %>% select(
+  -one_of(
+    "Lon_Lat","INCIDENT_KEY","X_COORD_CD","Y_COORD_CD",
+    "OCCUR_TIME",
+    "JURISDICTION_CODE",
+    "LOCATION_DESC",
+    "STATISTICAL_MURDER_FLAG",
+    "PERP_AGE_GROUP",
+    "PERP_SEX",
+    "PERP_RACE",
+    "VIC_AGE_GROUP",
+    "VIC_SEX",
+    "VIC_RACE"
+    ))
+#transform(clean, clean$BORO=factor(clean$BORO))
+#transform(clean, clean$PRECINCT=factor(clean$PRECINCT))
+clean$BORO <- factor(clean$BORO)
+clean$PRECINCT <- factor(clean$PRECINCT)
 ```
 
-Convert dates and times corresponding objects.
+Convert dates into corresponding objects.
 ```{r echo = FALSE}
-clean <- mutate(clean,OCCUR_TIME = as.POSIXct(paste(OCCUR_DATE,OCCUR_TIME),format="%m/%d/%Y %H:%M:%S",tz="EST", origin = "1970-01-01"))
 clean <- transform(clean, OCCUR_DATE = mdy(OCCUR_DATE))
-```
-
-Statistical murder flag should be binary not a string
-```{r echo = FALSE}
-clean <- transform(clean,STATISTICAL_MURDER_FLAG = (STATISTICAL_MURDER_FLAG=="true"))
 ```
 
 Summary to confirm no missing data
@@ -47,11 +58,64 @@ summary(clean)
 ```
 
 # Initial transformation
-I would like to break down the data into 
+
+## Civic Regions and Year
+Drop unneeded columns for this 
+I would like to break down the data into Burroughs and precincts as well as breaking it down by year for an initial view of the trends.
+```{r echo= F, eval=T}
+clean <- mutate(clean, year=year(OCCUR_DATE))
+boros <- select(clean,
+  -one_of(
+      "PRECINCT",
+      "Latitude",
+      "Longitude",
+      "OCCUR_DATE"
+  ))
+boro_y <- data.frame(t(table(group_by(boros,year))))
+boroplot <- ggplot(boro_y, aes(x=year,y=Freq,col=BORO,group=BORO))+geom_line()
+# row.names(table(group_by(boros,year)))
+boroplot
+# boros_y <- table(group_by(boros,year)) %>% melt( variable.name="Year")
+```
+```{r echo= F, eval=T}
+prec <- select(clean,
+  -one_of(
+      "BORO",
+      "Latitude",
+      "Longitude",
+      "OCCUR_DATE"
+  ))
+prec_y <- data.frame(t(table(group_by(prec,year))))
+precplot <- ggplot(prec_y, aes(x=year,y=Freq,col=PRECINCT,group=PRECINCT))+geom_line()
+# row.names(table(group_by(boros,year)))
+precplot
+```
+## Latitude and Longitude focus
+Break up by year.
+Take only shooting locations.
+Use heat maps for exploration.
+
+
+
+
+
+
 
 \newpage
 
 # Appendix: Discarded Initial Exploration
+
+## Data Cleaning
+I only need one coordinate source, so I'm going to keep the Latitude and Longitude and get rid of unnecessary items.
+```{r echo = FALSE}
+clean <- raw_data %>% select(-one_of("LON_LAT","INCIDENT_KEY","X_COORD_CD","Y_COORD_CD"))
+clean <- transform(clean, OCCUR_DATE = mdy(OCCUR_DATE))
+```
+
+Statistical murder flag should be binary not a string
+```{r echo = FALSE}
+clean <- transform(clean,STATISTICAL_MURDER_FLAG = (STATISTICAL_MURDER_FLAG=="true"))
+```
 ## Basic Transformations
 Creating 2 column table of dates vs num of shootings. Displaying with basic linear model.
 
@@ -69,7 +133,6 @@ shotplot <- ggplot(by_day_df)+geom_point(
   geom_smooth(data=by_day_df, method='lm', aes(x=date, y=shootings))
 shotplot
 ```
-
 
 ## Analysis
 
