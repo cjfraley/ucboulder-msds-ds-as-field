@@ -163,21 +163,61 @@ all_d <- mutate(
     (Freq-lag(Freq))/lag(Freq)
   )
 )
-all_d
 allplot <- ggplot(all_d)+aes(x=year,y=change, group=1)+geom_line()
 allplot
 ```
 
-So change at the boro and precinct level - the change at the city level:
-```{r echo= F, eval=F}
-prec_d_norm <- prec_d$year
+So .change at the boro and precinct level - the change at the city level:
+```{r echo= F, eval=T}
+prec_d_norm <- data.frame(year=prec_d$year)
 for (prec_num in levels(prec$PRECINCT)){
-  prec_d_norm[prec_num] <- transmute(
-    prec_d,
-    prec_num = 
-  ))
+  prec_d_norm[prec_num] <- prec_d[prec_num]-all_d$change
 }
+p_prec_n_d <- pivot_longer(
+  prec_d_norm, 
+  cols=levels(prec$PRECINCT),
+  names_to = "PRECINCT",
+  values_to="change"
+  )
+precplot <- ggplot(
+  p_prec_n_d, 
+  aes(x=year,y=change,col=PRECINCT,group=PRECINCT))+geom_line()
+# precplot<- precplot+geom_line(all_d, aes(x=year,y=change,color="black"))
+precplot
 ```
+```{r echo= F, eval=T}
+boro_d_norm <- data.frame(year=boro_d$year)
+for (boro_name in levels(boros$BORO)){
+  boro_d_norm[boro_name] <- boro_d[boro_name]-all_d$change
+}
+p_boro_n_d <- pivot_longer(
+  boro_d_norm, 
+  cols=levels(boros$BORO),
+  names_to = "BORO",
+  values_to="change"
+  )
+boroplot <- ggplot(
+  p_boro_n_d, 
+  aes(x=year,y=change,col=BORO,group=BORO))+geom_line()
+boroplot
+```
+
+# Conclusion
+
+## Additional Questions
+Second derivative/change in trend analysis
+Use of higher resolution combined with periodic analysis 
+Lat/Lon analysis
+## Assumptions
+
+### Personal
+
+### Methodological
+
+Assumption that taking years as a whole should remove periodic changes and illuminate longer term changes
+
+### Data
+
 \newpage
 
 # Appendix: Discarded Initial Exploration
